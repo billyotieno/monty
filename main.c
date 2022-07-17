@@ -1,103 +1,103 @@
 #include "monty.h"
 
+global_t vglo;
 
 /**
-* opcode_finder - find opcode
-* @stack: stack pointer
-* @opcode: user input opcode
-* @line_number: line number
-* Return: Always 1 (Success) or stderr
-**/
-int find_opcode(stack_t **stack, char *opcode, int line_number)
+ * free_vglo - frees the global variables
+ *
+ * Return: no return
+ */
+void free_vglo(void)
 {
-instruction_t opcodes[] = {
-{"pall", pall},
-{"pop", pop},
-{"swap", swap},
-{"pint", pint},
-{NULL, NULL}
-};
-
-int i;
-
-for (i = 0; opcodes[i].opcode; i++)
-{
-if (strcmp(opcode, opcodes[i].opcode) == 0)
-{
-(opcodes[i].f)(stack, line_number);
-return (EXIT_SUCCESS);
-}
-}
-fprintf(stderr, "L%d: unknown instruction %s\n", line_number, opcode);
-exit(EXIT_FAILURE);
-}
-
-
-/**
-* main - Process Monty byte codes from a file passed in as an argument
-* @argc: size of argv
-* @argv: A double pointer contain the arguments
-* Return: EXIT_SUCCESS if no errors or EXIT_FAILURE
-**/
-
-int main(__attribute__((unused)) int argc, char const *argv[])
-{
-FILE *mf;
-char *buff = NULL, *opcode, *n;
-size_t lol = 0;
-int line_number = 0;
-stack_t *stack = NULL, *current;
-
-if (argc != 2)
-{
-fprintf(stderr, "USAGE: monty file\n");
-return (EXIT_FAILURE);
-}
-mf = fopen(argv[1], "r");
-if (mf == NULL)
-{
-fprintf(stderr, "Error: can't open file %s\n", argv[1]);
-exit(1);
-}
-while ((getline(&buff, &lol, mf)) != -1)
-{
-line_number++;
-opcode = strtok(buff, DELIMATOR);
-if (opcode == NULL || opcode[0] == '#')
-continue;
-if (!strcmp(opcode, "nop"))
-continue;
-else if (!strcmp(opcode, "push"))
-{
-n = strtok(NULL, DELIMATOR);
-push(&stack, n, line_number);
-}
-else
-find_opcode(&stack, opcode, line_number);
-}
-fclose(mf);
-free(buff);
-while (stack != NULL)
-{
-current = stack;
-stack = stack->next;
-free(current);
-}
-return (0);
+	free_dlistint(vglo.head);
+	free(vglo.buffer);
+	fclose(vglo.fd);
 }
 
 /**
-* free_stack - fff
-* @stack: fff
-**/
-void free_stack(stack_t *stack)
+ * start_vglo - initializes the global variables
+ *
+ * @fd: file descriptor
+ * Return: no return
+ */
+void start_vglo(FILE *fd)
 {
-stack_t *next;
-
-while (stack != NULL)
-{
-next = stack->next;
-free(stack);
-stack = next;
+	vglo.lifo = 1;
+	vglo.cont = 1;
+	vglo.arg = NULL;
+	vglo.head = NULL;
+	vglo.fd = fd;
+	vglo.buffer = NULL;
 }
+
+/**
+ * check_input - checks if the file exists and if the file can
+ * be opened
+ *
+ * @argc: argument count
+ * @argv: argument vector
+ * Return: file struct
+ */
+FILE *check_input(int argc, char *argv[])
+{
+	FILE *fd;
+
+	if (argc == 1 || argc > 2)
+	{
+		dprintf(2, "USAGE: monty file\n");
+		exit(EXIT_FAILURE);
+	}
+
+	fd = fopen(argv[1], "r");
+
+	if (fd == NULL)
+	{
+		dprintf(2, "Error: Can't open file %s\n", argv[1]);
+		exit(EXIT_FAILURE);
+	}
+
+	return (fd);
+}
+
+/**
+ * main - Entry point
+ *
+ * @argc: argument count
+ * @argv: argument vector
+ * Return: 0 on success
+ */
+int main(int argc, char *argv[])
+{
+	void (*f)(stack_t **stack, unsigned int line_number);
+	FILE *fd;
+	size_t size = 256;
+	ssize_t nlines = 0;
+	char *lines[2] = {NULL, NULL};
+
+	fd = check_input(argc, argv);
+	start_vglo(fd);
+	nlines = getline(&vglo.buffer, &size, fd);
+	while (nlines != -1)
+	{
+		lines[0] = _strtoky(vglo.buffer, " \t\n");
+		if (lines[0] && lines[0][0] != '#')
+		{
+			f = get_opcodes(lines[0]);
+			if (!f)
+			{
+				dprintf(2, "L%u: ", vglo.cont);
+				dprintf(2, "unknown instruction %s\n", lines[0]);
+				free_vglo();
+				exit(EXIT_FAILURE);
+			}
+			vglo.arg = _strtoky(NULL, " \t\n");
+			f(&vglo.head, vglo.cont);
+		}
+		nlines = getline(&vglo.buffer, &size, fd);
+		vglo.cont++;
+	}
+
+	free_vglo();
+
+	return (0);
 }
